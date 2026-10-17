@@ -1,0 +1,636 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  SHOP_OWNER
+  SHOP_MANAGER
+  DELIVERY_STAFF
+  CUSTOMER
+}
+
+enum ShopStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum MembershipRole {
+  OWNER
+  MANAGER
+  DELIVERY_STAFF
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  GRACE_PERIOD
+  SUSPENDED
+  CANCELLED
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  PREPARING
+  DELIVERY_ASSIGNED
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED_DELIVERY
+  CANCELLED
+}
+
+enum DeliveryAssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+}
+
+enum CODStatus {
+  PENDING_COLLECTION
+  COLLECTED
+  RECONCILED
+}
+
+enum InventoryMovementType {
+  PURCHASE
+  SALE
+  ADJUSTMENT_ADD
+  ADJUSTMENT_REMOVE
+  RETURN
+  LOSS
+}
+
+enum NotificationChannel {
+  IN_APP
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ─── User & Auth ──────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  phone        String?  @unique
+  name         String
+  passwordHash String?
+  role         UserRole @default(CUSTOMER)
+  isVerified   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions              UserSession[]
+  addresses             UserAddress[]
+  ownedShops            Shop[]                @relation("ShopOwner")
+  memberships           ShopMembership[]
+  orders                Order[]               @relation("CustomerOrders")
+  deliveryAssignments   DeliveryAssignment[]  @relation("StaffAssignments")
+  assignedByMe          DeliveryAssignment[]  @relation("AssignedBy")
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  inventoryMovements    InventoryMovement[]
+  reconciledCollections CODCollection[]       @relation("ReconciledBy")
+  platformSettingsUpdated PlatformSetting[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("user_sessions")
+}
+
+model UserAddress {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String   @default("Home")
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  pincode   String
+  lat       Decimal? @db.Decimal(10, 7)
+  lng       Decimal? @db.Decimal(10, 7)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+  @@map("user_addresses")
+}
+
+model OtpVerification {
+  id        String   @id @default(cuid())
+  target    String   // phone or email
+  code      String
+  purpose   String   // REGISTRATION, LOGIN, PASSWORD_RESET
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([target, purpose])
+  @@map("otp_verifications")
+}
+
+// ─── Shop ─────────────────────────────────────────────────────────────────────
+
+model Shop {
+  id                  String     @id @default(cuid())
+  ownerId             String
+  name                String
+  slug                String     @unique
+  logoUrl             String?
+  coverImageUrl       String?
+  description         String?
+  categoryId          String?
+  phone               String?
+  email               String?
+  addressLine         String?
+  city                String?
+  state               String?
+  pincode             String?
+  lat                 Decimal?   @db.Decimal(10, 7)
+  lng                 Decimal?   @db.Decimal(10, 7)
+  deliveryRadiusKm    Decimal    @default(5) @db.Decimal(5, 2)
+  minOrderAmount      Decimal    @default(0) @db.Decimal(10, 2)
+  isPickupEnabled     Boolean    @default(true)
+  isDeliveryEnabled   Boolean    @default(true)
+  isOpen              Boolean    @default(true)
+  status              ShopStatus @default(PENDING)
+  approvedAt          DateTime?
+  rejectedAt          DateTime?
+  rejectionReason     String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  owner             User                @relation("ShopOwner", fields: [ownerId], references: [id])
+  category          Category?           @relation(fields: [categoryId], references: [id])
+  memberships       ShopMembership[]
+  operatingHours    ShopOperatingHour[]
+  products          Product[]
+  subscriptions     Subscription[]
+  orders            Order[]
+  inventoryMovements InventoryMovement[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([lat, lng])
+  @@map("shops")
+}
+
+model ShopMembership {
+  id        String         @id @default(cuid())
+  shopId    String
+  userId    String
+  role      MembershipRole
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, userId])
+  @@index([shopId])
+  @@index([userId])
+  @@map("shop_memberships")
+}
+
+model ShopOperatingHour {
+  id         String  @id @default(cuid())
+  shopId     String
+  dayOfWeek  Int     // 0=Sunday … 6=Saturday
+  openTime   String? // "09:00"
+  closeTime  String? // "21:00"
+  isClosed   Boolean @default(false)
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, dayOfWeek])
+  @@map("shop_operating_hours")
+}
+
+// ─── Catalogue ────────────────────────────────────────────────────────────────
+
+model Category {
+  id         String     @id @default(cuid())
+  name       String
+  slug       String     @unique
+  parentId   String?
+  imageUrl   String?
+  sortOrder  Int        @default(0)
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  shops    Shop[]
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  shopId      String
+  categoryId  String?
+  name        String
+  slug        String
+  description String?
+  sku         String?
+  barcode     String?
+  images      Json     @default("[]")
+  isActive    Boolean  @default(true)
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shop     Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  category Category?       @relation(fields: [categoryId], references: [id])
+  variants ProductVariant[]
+
+  @@unique([shopId, slug])
+  @@index([shopId])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id                 String   @id @default(cuid())
+  productId          String
+  name               String   @default("Default")
+  sku                String?
+  price              Decimal  @db.Decimal(10, 2)
+  costPrice          Decimal? @db.Decimal(10, 2)
+  taxRate            Decimal  @default(0) @db.Decimal(5, 2)
+  stockQty           Int      @default(0)
+  lowStockThreshold  Int      @default(5)
+  isAvailable        Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems          CartItem[]
+  orderItems         OrderItem[]
+  inventoryMovements InventoryMovement[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model InventoryMovement {
+  id            String                @id @default(cuid())
+  variantId     String
+  shopId        String
+  type          InventoryMovementType
+  qty           Int
+  balanceBefore Int
+  balanceAfter  Int
+  reason        String?
+  orderId       String?
+  actorId       String?
+  createdAt     DateTime              @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+  shop    Shop           @relation(fields: [shopId], references: [id])
+  actor   User?          @relation(fields: [actorId], references: [id])
+  order   Order?         @relation(fields: [orderId], references: [id])
+
+  @@index([variantId])
+  @@index([shopId])
+  @@index([orderId])
+  @@map("inventory_movements")
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+model SubscriptionPlan {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  priceMonthly      Decimal  @db.Decimal(10, 2)
+  billingPeriodDays Int      @default(30)
+  trialDays         Int      @default(30)
+  gracePeriodDays   Int      @default(7)
+  maxProducts       Int?
+  maxOrdersPerMonth Int?
+  maxStaff          Int?
+  features          Json     @default("{}")
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  shopId              String
+  planId              String
+  status              SubscriptionStatus @default(TRIAL)
+  trialStartsAt       DateTime?
+  trialEndsAt         DateTime?
+  currentPeriodStart  DateTime?
+  currentPeriodEnd    DateTime?
+  cancelledAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  shop   Shop             @relation(fields: [shopId], references: [id])
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+  events SubscriptionEvent[]
+  invoices Invoice[]
+
+  @@index([shopId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model SubscriptionEvent {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  event          String
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
+  @@map("subscription_events")
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  amount         Decimal  @db.Decimal(10, 2)
+  currency       String   @default("INR")
+  status         String   @default("PENDING")
+  periodStart    DateTime
+  periodEnd      DateTime
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
+  @@map("invoices")
+}
+
+// ─── Cart ─────────────────────────────────────────────────────────────────────
+
+model Cart {
+  id         String   @id @default(cuid())
+  customerId String
+  shopId     String
+  updatedAt  DateTime @updatedAt
+
+  items CartItem[]
+
+  @@unique([customerId, shopId])
+  @@map("carts")
+}
+
+model CartItem {
+  id              String   @id @default(cuid())
+  cartId          String
+  variantId       String
+  qty             Int
+  priceSnapshot   Decimal  @db.Decimal(10, 2)
+  updatedAt       DateTime @updatedAt
+
+  cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
+
+// ─── Order ────────────────────────────────────────────────────────────────────
+
+model Order {
+  id                      String      @id @default(cuid())
+  orderNumber             String
+  customerId              String
+  shopId                  String
+  addressId               String?
+  status                  OrderStatus @default(PENDING)
+  subtotal                Decimal     @db.Decimal(10, 2)
+  deliveryFee             Decimal     @default(0) @db.Decimal(10, 2)
+  discount                Decimal     @default(0) @db.Decimal(10, 2)
+  total                   Decimal     @db.Decimal(10, 2)
+  deliveryAddressSnapshot Json
+  customerNameSnapshot    String
+  customerPhoneSnapshot   String
+  notes                   String?
+  placedAt                DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  customer           User                 @relation("CustomerOrders", fields: [customerId], references: [id])
+  shop               Shop                 @relation(fields: [shopId], references: [id])
+  address            UserAddress?         @relation(fields: [addressId], references: [id])
+  items              OrderItem[]
+  statusHistory      OrderStatusHistory[]
+  deliveryAssignment DeliveryAssignment?
+  codCollection      CODCollection?
+  inventoryMovements InventoryMovement[]
+
+  @@unique([shopId, orderNumber])
+  @@index([customerId])
+  @@index([shopId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                  String  @id @default(cuid())
+  orderId             String
+  variantId           String?
+  productNameSnapshot String
+  variantNameSnapshot String
+  qty                 Int
+  unitPrice           Decimal @db.Decimal(10, 2)
+  total               Decimal @db.Decimal(10, 2)
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id         String      @id @default(cuid())
+  orderId    String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  reason     String?
+  actorId    String?
+  createdAt  DateTime    @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ─── Delivery ─────────────────────────────────────────────────────────────────
+
+model DeliveryAssignment {
+  id             String                   @id @default(cuid())
+  orderId        String                   @unique
+  staffId        String
+  assignedById   String
+  status         DeliveryAssignmentStatus @default(ASSIGNED)
+  assignedAt     DateTime                 @default(now())
+  acceptedAt     DateTime?
+  pickedUpAt     DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  failureReason  String?
+  proofType      String?
+  proofValue     String?
+  notes          String?
+  updatedAt      DateTime                 @updatedAt
+
+  order      Order @relation(fields: [orderId], references: [id])
+  staff      User  @relation("StaffAssignments", fields: [staffId], references: [id])
+  assignedBy User  @relation("AssignedBy", fields: [assignedById], references: [id])
+
+  codCollection CODCollection?
+
+  @@index([staffId])
+  @@index([status])
+  @@map("delivery_assignments")
+}
+
+model CODCollection {
+  id              String    @id @default(cuid())
+  orderId         String    @unique
+  assignmentId    String?   @unique
+  amountDue       Decimal   @db.Decimal(10, 2)
+  amountCollected Decimal?  @db.Decimal(10, 2)
+  status          CODStatus @default(PENDING_COLLECTION)
+  collectedAt     DateTime?
+  reconciledAt    DateTime?
+  reconciledById  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  order        Order               @relation(fields: [orderId], references: [id])
+  assignment   DeliveryAssignment? @relation(fields: [assignmentId], references: [id])
+  reconciledBy User?               @relation("ReconciledBy", fields: [reconciledById], references: [id])
+
+  @@map("cod_collections")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  user     User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts NotificationDeliveryAttempt[]
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model NotificationDeliveryAttempt {
+  id               String                     @id @default(cuid())
+  notificationId   String
+  channel          NotificationChannel
+  status           NotificationDeliveryStatus @default(PENDING)
+  providerResponse Json?
+  sentAt           DateTime?
+  failedAt         DateTime?
+  createdAt        DateTime                   @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@map("notification_delivery_attempts")
+}
+
+// ─── Admin & Audit ────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  entity    String
+  entityId  String
+  action    String
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+model PlatformSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("platform_settings")
+}
