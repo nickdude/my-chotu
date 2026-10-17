@@ -1,0 +1,153 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─── My Chotu Design Tokens ──────────────────────────────────────────────── */
+/*
+  Primary orange : #F4512C  — CTAs, highlights, active states
+  Midnight navy  : #152744  — headings, nav, sidebars
+  Warm white     : #FFFDF9  — page background
+  Soft grey      : #F1F3F5  — surface backgrounds, borders
+  Success green  : #16845B  — success states
+  Primary text   : #252A34  — body copy
+*/
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-green: var(--brand-green);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  /* Brand palette */
+  --brand-orange: #F4512C;
+  --brand-navy: #152744;
+  --brand-warm-white: #FFFDF9;
+  --brand-grey: #F1F3F5;
+  --brand-green: #16845B;
+  --brand-text: #252A34;
+
+  /* shadcn semantic tokens mapped to My Chotu brand */
+  --background: #FFFDF9;
+  --foreground: #252A34;
+  --card: #ffffff;
+  --card-foreground: #252A34;
+  --popover: #ffffff;
+  --popover-foreground: #252A34;
+  --primary: #F4512C;
+  --primary-foreground: #ffffff;
+  --secondary: #152744;
+  --secondary-foreground: #ffffff;
+  --muted: #F1F3F5;
+  --muted-foreground: #6b7280;
+  --accent: #FFF0EB;
+  --accent-foreground: #F4512C;
+  --destructive: #dc2626;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #F4512C;
+  --radius: 0.5rem;
+
+  /* Sidebar uses navy */
+  --sidebar: #152744;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #F4512C;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e3660;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #1e3660;
+  --sidebar-ring: #F4512C;
+}
+
+.dark {
+  --background: #0f1a2b;
+  --foreground: #f8fafc;
+  --card: #152744;
+  --card-foreground: #f8fafc;
+  --popover: #152744;
+  --popover-foreground: #f8fafc;
+  --primary: #F4512C;
+  --primary-foreground: #ffffff;
+  --secondary: #1e3660;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e3660;
+  --muted-foreground: #94a3b8;
+  --accent: #2a4a7f;
+  --accent-foreground: #f8fafc;
+  --destructive: #ef4444;
+  --border: #1e3660;
+  --input: #1e3660;
+  --ring: #F4512C;
+  --sidebar: #0f1a2b;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #F4512C;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #152744;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #152744;
+  --sidebar-ring: #F4512C;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html {
+    @apply scroll-smooth;
+  }
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────── */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--brand-navy);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+}
+
+/* ─── Focus ring ─────────────────────────────────────────────────────────── */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--brand-orange);
+    outline-offset: 2px;
+  }
+}
